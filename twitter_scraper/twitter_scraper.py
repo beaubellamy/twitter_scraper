@@ -4,6 +4,13 @@ from datetime import datetime, timedelta
 import pandas as pd
 from searchtweets import load_credentials, collect_results, gen_rule_payload
 from pandas.io.json import json_normalize
+from twitter_keys import access_token, access_token_secret, consumer_key, consumer_secret
+
+#from TwitterListener import TwitterListener
+#import TwitterListener
+from tweepy.streaming import StreamListener
+from tweepy import Stream, OAuthHandler
+import re
 
 #Twitter sentiment
 #-	Collect tweets
@@ -63,10 +70,66 @@ def use_premium():
     tweet_df.sort_values(by='created_at', inplace=True)
     tweet_df.to_csv(filename, index=False)
 
-        
+# add the filename to the class
+class TwitterListener(StreamListener):
+    
+    def __init__(self, api = StreamListener):
+        #return super().__init__(api)
+        self.filename = 'test.txt'
 
+    
+    def on_data(self, data):
+        global tweet_count
+        global n_tweets
+        global stream
+        global live_tweets
+        if tweet_count < n_tweets:
+            print(data)            
+
+            with open(self.filename, 'a') as myfile:
+                myfile.write(data)
+
+            tweet_count += 1
+            return True
+        else:
+            stream.disconnect()
+
+    def on_error(self, status):
+        print(status)
+
+#with open(DATA_FILENAME, mode='w', encoding='utf-8') as f:
+#    json.dump([], f)
+
+
+#with open(DATA_FILENAME, mode='w', encoding='utf-8') as feedsjson:
+#    entry = {'name': args.name, 'url': args.url}
+#    feeds.append(entry)
+#    json.dump(feeds, feedsjson)
+
+def use_live_stream():
+    
+   
+    # Create tracklist with the words that will be searched for
+    tracklist = ['trump']
+    # Initialize Global variable
+    global tweet_count, n_tweets, stream, live_tweet_df, live_tweets
+    tweet_count = 0
+
+    # Input number of tweets to be downloaded
+    n_tweets = 10
+
+    #live_tweet_df = pd.DataFrame()
+    live_tweets = []
+
+    # Handles Twitter authentification and the connection to Twitter Streaming API
+    l = TwitterListener()
+    auth = OAuthHandler(consumer_key, consumer_secret)
+    auth.set_access_token(access_token, access_token_secret)
+    stream = Stream(auth, l)
+    stream.filter(track=tracklist)
+    #print (live_tweet_df.shape)
 
 print ('starting here')
-use_premium()
-
+#use_premium()
+use_live_stream()
 

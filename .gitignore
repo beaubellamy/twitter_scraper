@@ -259,3 +259,8 @@ paket-files/
 # Python Tools for Visual Studio (PTVS)
 __pycache__/
 *.pyc
+/twitter_scraper/credentials.yaml
+*.sln
+/twitter_scraper/twitter_scraper.pyproj
+/twitter_scraper/twitter_keys.py
+/twitter_scraper/test.txt
