@@ -23,22 +23,60 @@ import re
 #-	Number of likes of authored tweets
 
 
-def use_premium():
+class TwitterListener(StreamListener):
+    '''
+    Twitter Listening class
+    '''
+    
+    def __init__(self, api = StreamListener, 
+                 tweet_count=0, 
+                 max_tweets=10,
+                 live_tweets = []):
 
-    search = 'Qantas'
-    filename = 'scraper_results.csv'
+        # Set the initial vallues
+        self.tweet_count = tweet_count
+        self.max_tweets = max_tweets
+        self.live_tweets = live_tweets
+
+    
+    def on_data(self, data):
+        '''
+        Calling routine to get the live twitter feed
+        '''
+
+        global stream
+        if self.tweet_count < self.max_tweets:
+            print(data)                        
+            self.live_tweets.append(data)
+            
+            self.tweet_count += 1
+            return True
+        else:
+            print ('The stream still needs to be disconnected')
+            return False
+
+    def on_error(self, status):
+        ''' Return the error from the twitter stream. '''
+        print(status)
+
+
+def use_premium(search, filename, from_date, to_date):
+    '''
+    Collect historical tweets
+    '''
 
     try:
         tweet_df = pd.read_csv(filename, dtype=str, encoding = 'ISO-8859-1')
     except FileNotFoundError:
         tweet_df = pd.DataFrame()
 
+    # Extract the credentials for the endpoint.
     search_stream = load_credentials(filename='./credentials.yaml',
                                      yaml_key='search_premium_30day_api',
                                      env_overwrite=False)
 
-    from_date='2019-12-01'
-    to_date='2019-12-15'
+    # Collect tweets while we are permitted. 
+    # Todo: Still dont know how to catch the re-try limit error?
     while to_date > from_date:
 
         rule = gen_rule_payload(search, from_date=from_date, to_date=to_date, results_per_call=100)
@@ -46,8 +84,6 @@ def use_premium():
             tweets = collect_results(rule, max_results=2000, result_stream_args=search_stream)
         except:
             break
-
-        # if not use max=1000, and find the minmum date. Use this as to_date in next call.
 
         for idx, tweet in enumerate(tweets):
             tweet_df = tweet_df.append([json_normalize(tweet)], ignore_index=True, sort=False)
@@ -70,66 +106,59 @@ def use_premium():
     tweet_df.sort_values(by='created_at', inplace=True)
     tweet_df.to_csv(filename, index=False)
 
-# add the filename to the class
-class TwitterListener(StreamListener):
-    
-    def __init__(self, api = StreamListener):
-        #return super().__init__(api)
-        self.filename = 'test.txt'
 
-    
-    def on_data(self, data):
-        global tweet_count
-        global n_tweets
-        global stream
-        global live_tweets
-        if tweet_count < n_tweets:
-            print(data)            
+def use_live_stream(tracklist, filename, n_tweets=10):
+    '''
+    Collect tweets from the live stream
+    '''
 
-            with open(self.filename, 'a') as myfile:
-                myfile.write(data)
-
-            tweet_count += 1
-            return True
-        else:
-            stream.disconnect()
-
-    def on_error(self, status):
-        print(status)
-
-#with open(DATA_FILENAME, mode='w', encoding='utf-8') as f:
-#    json.dump([], f)
-
-
-#with open(DATA_FILENAME, mode='w', encoding='utf-8') as feedsjson:
-#    entry = {'name': args.name, 'url': args.url}
-#    feeds.append(entry)
-#    json.dump(feeds, feedsjson)
-
-def use_live_stream():
-    
-   
-    # Create tracklist with the words that will be searched for
-    tracklist = ['trump']
-    # Initialize Global variable
-    global tweet_count, n_tweets, stream, live_tweet_df, live_tweets
     tweet_count = 0
 
-    # Input number of tweets to be downloaded
-    n_tweets = 10
-
-    #live_tweet_df = pd.DataFrame()
-    live_tweets = []
-
     # Handles Twitter authentification and the connection to Twitter Streaming API
-    l = TwitterListener()
     auth = OAuthHandler(consumer_key, consumer_secret)
     auth.set_access_token(access_token, access_token_secret)
-    stream = Stream(auth, l)
-    stream.filter(track=tracklist)
-    #print (live_tweet_df.shape)
+    listener = TwitterListener(tweet_count=tweet_count, 
+                               max_tweets=n_tweets,
+                               live_tweets = [])
 
-print ('starting here')
-#use_premium()
-use_live_stream()
+    stream = Stream(auth, listener)
+    stream.disconnect()
 
+    stream.filter(track=tracklist, languages=['en'])
+    print (len(listener.live_tweets))
+
+    for tweet in listener.live_tweets:
+        with open(filename, 'a') as file:
+            file.write(tweet)
+
+    print ('end')
+
+if __name__ == '__main__':
+    
+    # Premium
+    #search = 'Qantas'
+    #filename = 'scraper_results.csv'
+    #from_date='2019-12-01'
+    #to_date='2019-12-15'
+
+    # Can be 30day or fullarchive endpoints
+    #use_premium(search, filename, from_date, to_date)
+
+    # Live Stream
+    tracklist = ','.join(['Airline', 
+                     'Singapore Airlines', 'Singapore Air', 
+                     'Air New Zealand', 
+                     'Qantas', 
+                     'Qatar Airways', 
+                     'Virgin Australia', 'Virgin Air', 
+                     'Emirates', 
+                     'Nippon Air', 'All Nippon Airways', 
+                     'EVA Air', 
+                     'Cathay Pacific', 'Cathay', 
+                     'Japan Air', 'Japan Airlines'])
+    filename = 'airlines.txt'
+    #tracklist = ['trump']
+    #filename = 'trump.txt'
+    n_tweets = 10
+
+    use_live_stream(tracklist, filename, n_tweets)
