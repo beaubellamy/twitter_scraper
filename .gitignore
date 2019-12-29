@@ -268,3 +268,5 @@ __pycache__/
 /twitter_scraper/test1.txt
 /twitter_scraper/qantas.txt
 /twitter_scraper/airlines.txt
+/twitter_scraper/airlines.csv
+/twitter_scraper/intermediate.json

@@ -2,6 +2,7 @@ import os
 import time
 from datetime import datetime, timedelta
 import pandas as pd
+import json
 from searchtweets import load_credentials, collect_results, gen_rule_payload
 from pandas.io.json import json_normalize
 from twitter_keys import access_token, access_token_secret, consumer_key, consumer_secret
@@ -46,9 +47,13 @@ class TwitterListener(StreamListener):
 
         global stream
         if self.tweet_count < self.max_tweets:
-            print(data)                        
+            if self.max_tweets < 100:
+                print(data)                        
+            else:
+                if self.tweet_count % 100 == 0:
+                    print(data)
+
             self.live_tweets.append(data)
-            
             self.tweet_count += 1
             return True
         else:
@@ -59,11 +64,33 @@ class TwitterListener(StreamListener):
         ''' Return the error from the twitter stream. '''
         print(status)
 
+def tweets_to_csv(live_tweets, filename, append_mode='a'):
 
-def use_premium(search, filename, from_date, to_date):
+    assert append_mode in ['r', 'w', 'a', 'r+'], 'append mode must be one of "r", "w", "a", or "r+"'
+
+    if append_mode == 'w' and os.path.exists('intermediate.json'):
+        os.remove('intermediate.json')
+
+    for tweet in live_tweets:
+        with open('intermediate.json', 'a') as file:
+            # Convert the tweets to dictionary items
+            json.dump(json.loads(tweet), file)
+            file.write('\n')
+
+    df = pd.read_json('intermediate.json', lines=True)
+    df.to_csv(filename)
+
+
+def use_premium(search, filename, from_date, to_date, enpoint='full'):
     '''
     Collect historical tweets
     '''
+    if endpoint == '30day':
+        endpoint_key = 'search_premium_30day_api'
+        #endpoint_key = 'search_lynxx_30day_api'
+    else:
+        endpoint_key = 'search_premium_full_api'
+        #endpoint_key = 'search_lynxx_full_api'
 
     try:
         tweet_df = pd.read_csv(filename, dtype=str, encoding = 'ISO-8859-1')
@@ -72,7 +99,7 @@ def use_premium(search, filename, from_date, to_date):
 
     # Extract the credentials for the endpoint.
     search_stream = load_credentials(filename='./credentials.yaml',
-                                     yaml_key='search_premium_30day_api',
+                                     yaml_key=endpoint_key,
                                      env_overwrite=False)
 
     # Collect tweets while we are permitted. 
@@ -107,7 +134,7 @@ def use_premium(search, filename, from_date, to_date):
     tweet_df.to_csv(filename, index=False)
 
 
-def use_live_stream(tracklist, filename, n_tweets=10):
+def use_live_stream(tracklist, filename, append_mode, n_tweets=10):
     '''
     Collect tweets from the live stream
     '''
@@ -126,11 +153,8 @@ def use_live_stream(tracklist, filename, n_tweets=10):
 
     stream.filter(track=tracklist, languages=['en'])
     print (len(listener.live_tweets))
-
-    for tweet in listener.live_tweets:
-        with open(filename, 'a') as file:
-            file.write(tweet)
-
+    
+    tweets_to_csv(listener.live_tweets, filename, append_mode)
     print ('end')
 
 if __name__ == '__main__':
@@ -156,9 +180,8 @@ if __name__ == '__main__':
                      'EVA Air', 
                      'Cathay Pacific', 'Cathay', 
                      'Japan Air', 'Japan Airlines'])
-    filename = 'airlines.txt'
-    #tracklist = ['trump']
-    #filename = 'trump.txt'
-    n_tweets = 10
+    filename = 'airlines.csv'
+    append_mode = 'w'
+    n_tweets = 100
 
-    use_live_stream(tracklist, filename, n_tweets)
+    use_live_stream(tracklist, filename, append_mode, n_tweets)
